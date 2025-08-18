@@ -34,6 +34,34 @@ async def _generate_reply(messages):
             )
             return resp.choices[0].message.content.strip()
 
+def _is_image_attachment(att: discord.Attachment) -> bool:
+    """画像ファイルかどうかの簡易判定"""
+    ct = (att.content_type or "").lower()
+    return ct.startswith("image/") or att.filename.lower().endswith((".png", ".jpg", ".jpeg", ".webp", ".gif"))
+
+async def _generate_vision_reply(user_text: str, image_urls: list[str]) -> str:
+    """画像付きメッセージに対して短く回答（画像生成はしない）。"""
+    # content に text と image_url を混在
+    content = []
+    if user_text and user_text.strip():
+        content.append({"type": "text", "text": user_text.strip()})
+    else:
+        # 無言で画像だけ来た場合のデフォルト指示
+        content.append({"type": "text", "text": "画像の内容を日本語で端的に説明し、役立つ補足を1つだけ添えてください。"})
+    for url in image_urls[:4]:  # 念のため4枚まで
+        content.append({"type": "image_url", "image_url": {"url": url}})
+
+    async with GEN_SEMAPHORE:
+        async with asyncio.timeout(OPENAI_TIMEOUT):
+            resp = await oai.chat.completions.create(
+                model="gpt-5-vision-preview",
+                messages=[
+                    {"role": "system", "content": BASE_PERSONA},
+                    {"role": "user", "content": content},
+                ],
+            )
+            return resp.choices[0].message.content.strip()
+
 @bot.event
 async def on_ready():
     print(f"ログイン成功: {bot.user}")
@@ -45,6 +73,23 @@ async def on_message(message: discord.Message):
 
     async def _work():
         try:
+            # 画像が付いていたら先に Vision で処理（生成はしない）
+            image_urls = [att.url for att in message.attachments if _is_image_attachment(att)]
+            if image_urls:
+                async with message.channel.typing():
+                    reply = await _generate_vision_reply(message.content or "", image_urls)
+                # 会話履歴（テキストのみ保持）
+                user_id = message.author.id
+                chat_history.setdefault(user_id, [])
+                chat_history[user_id].append({"role": "user", "content": message.content or "[画像]"})
+                chat_history[user_id].append({"role": "assistant", "content": reply})
+                if len(chat_history[user_id]) > MAX_HISTORY_MESSAGES * 2:
+                    chat_history[user_id] = chat_history[user_id][-MAX_HISTORY_MESSAGES * 2:]
+                # Discordの2000文字制限対策（安全側に1900で分割）
+                for i in range(0, len(reply), 1900):
+                    await message.channel.send(reply[i:i+1900])
+                return
+
             user_id = message.author.id
             if user_id not in chat_history:
                 chat_history[user_id] = []
