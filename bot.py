@@ -47,7 +47,7 @@ async def _generate_vision_reply(user_text: str, image_urls: list[str]) -> str:
         content.append({"type": "text", "text": user_text.strip()})
     else:
         # 無言で画像だけ来た場合のデフォルト指示
-        content.append({"type": "text", "text": "画像の内容を日本語で端的に説明し、役立つ補足を1つだけ添えてください。"})
+        content.append({"type": "text", "text": BASE_PERSONA})
     for url in image_urls[:4]:  # 念のため4枚まで
         content.append({"type": "image_url", "image_url": {"url": url}})
 
