@@ -18,9 +18,7 @@ MAX_HISTORY_MESSAGES = 6
 chat_history = {}
 
 # 🧙‍♀️ 基本人格プロンプト（ここを書き換えればキャラを変えられる）
-BASE_PERSONA = """
-
-"""
+BASE_PERSONA = """あなたのプロンプト"""
 
 @bot.event
 async def on_ready():
