@@ -54,7 +54,7 @@ async def _generate_vision_reply(user_text: str, image_urls: list[str]) -> str:
     async with GEN_SEMAPHORE:
         async with asyncio.timeout(OPENAI_TIMEOUT):
             resp = await oai.chat.completions.create(
-                model="gpt-5-vision-preview",
+                model="gpt-4o-mini",
                 messages=[
                     {"role": "system", "content": BASE_PERSONA},
                     {"role": "user", "content": content},
