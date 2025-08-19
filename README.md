@@ -1,6 +1,6 @@
 # LeaFAI Discord Bot — Setup & Deployment (Railway)
 
-このREADMEは、同梱の `bot.py` を使ってDiscordボットをローカルで起動し、Railwayにデプロイして常時稼働させるまでの手順をまとめたものです。
+このREADMEは、同梱の `bot.py` を使ってDiscordボットを起動し、Railwayにデプロイして常時稼働させるまでの手順をまとめたものです。
 
 ---
 
@@ -11,7 +11,6 @@
 - [必要要件](#必要要件)
 - [Discord 側の準備](#discord-側の準備)
 - [OpenAI 側の準備](#openai-側の準備)
-- [ローカル実行手順](#ローカル実行手順)
 - [環境変数](#環境変数)
 - [設定のカスタマイズ](#設定のカスタマイズ)
 - [Railway へデプロイ](#railway-へデプロイ)
