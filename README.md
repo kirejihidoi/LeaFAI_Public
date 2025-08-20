@@ -82,7 +82,7 @@
 | ---------------- | -- | ----------------- |
 | `DISCORD_TOKEN`  | 必須 | Discord Bot Token |
 | `OPENAI_API_KEY` | 必須 | OpenAI の API キー   |
-
+| `AFFINITY_PATH=/data/affinity.json` | 必須 | 好感度ファイルのpath   |
 > 代替エンドポイントを使う場合は `openai` の標準設定に従ってコードを拡張してください（本実装は `api_key` のみ）。
 
 ---
@@ -124,9 +124,10 @@ Railway の **Variables** で以下を追加:
 
 - `DISCORD_TOKEN` = あなたの Bot Token
 - `OPENAI_API_KEY` = あなたの OpenAI API キー
+- `AFFINITY_PATH=/data/affinity.json`
 
 ### 5) デプロイ
-
+- Volumeを /data/affinity.json にマウントして、好感度はそこに置く。
 - 変数を保存すると自動でデプロイが走るか、**Deploy** を実行。
 - デプロイ完了後、ログに `Logged in as <BotName>` のような表示が出れば起動成功。
 
