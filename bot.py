@@ -37,7 +37,7 @@ async def _generate_reply(messages: list[dict]) -> str:
     async with GEN_SEMAPHORE:
         async with asyncio.timeout(OPENAI_TIMEOUT):
             resp = await oai.chat.completions.create(
-                model="gpt-5-mini",
+                model="gpt-5",
                 messages=messages,
             )
             return resp.choices[0].message.content.strip()
