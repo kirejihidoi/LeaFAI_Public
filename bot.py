@@ -5,6 +5,60 @@ import datetime
 import discord
 from openai import AsyncOpenAI
 
+from pathlib import Path
+import json
+
+# ===== 好感度 永続化と制御 =====
+AFF_PATH = Path(os.getenv("AFFINITY_PATH", "/data/affinity.json"))
+_aff_cache: dict[str, int] = {}
+if AFF_PATH.exists():
+    try:
+        _aff_cache = json.loads(AFF_PATH.read_text(encoding="utf-8"))
+    except Exception:
+        _aff_cache = {}
+
+def get_affinity(user_id: int) -> int:
+    try:
+        return int(_aff_cache.get(str(user_id), 0))
+    except Exception:
+        return 0
+
+def bump_affinity(user_id: int, delta: int) -> None:
+    cur = max(-5, min(5, get_affinity(user_id) + int(delta)))
+    _aff_cache[str(user_id)] = cur
+    try:
+        AFF_PATH.write_text(json.dumps(_aff_cache, ensure_ascii=False), encoding="utf-8")
+    except Exception:
+        pass
+
+POSITIVE_WORDS = ("ありがとう","助かった","感謝","うれしい","好き","助かる")
+NEGATIVE_WORDS = ("つまらん","バカ","使えない","嫌い","最悪","ゴミ","死ね")
+
+def score_text_for_affinity(text: str) -> int:
+    t = text.lower()
+    sc = 0
+    if any(w in text for w in POSITIVE_WORDS): sc += 1
+    if any(w in t for w in ("thx","thanks")): sc += 1
+    if "ごめん" in text or "すまん" in text: sc += 1  # 軽い謝意
+    if any(w in text for w in NEGATIVE_WORDS): sc -= 1
+    # スパム抑制：極端に長い罵倒や連投は-1どまり
+    if sc < -1: sc = -1
+    if sc > 2: sc = 2
+    return sc
+
+def affinity_style_instr(level: int) -> str:
+    if level <= -3:
+        return "RELATIONSHIP_TONE: cold; brevity: very short; warmth: low; sarcasm: high; avoid emojis."
+    if level <= -1:
+        return "RELATIONSHIP_TONE: cool; brevity: short; warmth: low; keep dry humor."
+    if level <= 1:
+        return "RELATIONSHIP_TONE: neutral; brevity: medium; warmth: moderate."
+    if level <= 3:
+        return "RELATIONSHIP_TONE: friendly; brevity: medium; warmth: a bit higher; slightly more helpful."
+    return "RELATIONSHIP_TONE: affectionate; brevity: medium; warmth: high; add a hint of playfulness."
+# ===== 好感度 ここまで =====
+
+
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
@@ -47,6 +101,8 @@ def _is_image_attachment(att: discord.Attachment) -> bool:
     ct = (att.content_type or "").lower()
     return ct.startswith("image/") or att.filename.lower().endswith((".png", ".jpg", ".jpeg", ".webp", ".gif"))
 
+current_user_id: int | None = None
+
 async def _generate_vision_reply(user_text: str, image_urls: list[str]) -> str:
     """画像付きメッセージに対して短く回答（画像生成はしない）。"""
     # content に text と image_url を混在
@@ -65,6 +121,7 @@ async def _generate_vision_reply(user_text: str, image_urls: list[str]) -> str:
                 model="gpt-5-mini",
                 messages=[
                     {"role": "system", "content": BASE_PERSONA},
+                    {"role": "system", "content": affinity_style_instr(get_affinity(current_user_id))},
                     {"role": "user", "content": content},
                 ],
             )
@@ -101,6 +158,11 @@ async def on_message(message: discord.Message):
             # 画像が付いていたら先に Vision で処理（生成はしない）
             image_urls = [att.url for att in message.attachments if _is_image_attachment(att)]
             if image_urls:
+                # Vision でも好感度制御を効かせるため、呼び出し前に user_id をセット
+                global current_user_id
+                current_user_id = message.author.id
+                # 好感度更新
+                bump_affinity(current_user_id, score_text_for_affinity(message.content or ""))
                 async with message.channel.typing():
                     reply = await _generate_vision_reply(message.content or "", image_urls)
                 # 会話履歴（テキストのみ保持）
@@ -117,10 +179,16 @@ async def on_message(message: discord.Message):
             user_id = message.author.id
             chat_history.setdefault(user_id, [])
             chat_history[user_id].append({"role": "user", "content": message.content})
+            # 好感度の更新
+            bump_affinity(user_id, score_text_for_affinity(message.content or ""))
             if len(chat_history[user_id]) > MAX_HISTORY_MESSAGES * 2:
                 chat_history[user_id] = chat_history[user_id][-MAX_HISTORY_MESSAGES * 2:]
 
-            messages_to_send = [{"role": "system", "content": BASE_PERSONA}] + chat_history[user_id]
+            # 好感度に応じた追加 system を差し込む
+            messages_to_send = [
+                {"role": "system", "content": BASE_PERSONA},
+                {"role": "system", "content": affinity_style_instr(get_affinity(user_id))},
+            ] + chat_history[user_id]
 
             async with message.channel.typing():
                 reply = await _generate_reply(messages_to_send)
