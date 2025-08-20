@@ -32,6 +32,7 @@
 
 ```
 .
+├─ data/affinity.json   # 好感度ファイル
 ├─ bot.py               # Discordボット本体
 ├─ conversations.json   # 今後の拡張用（現在は空）
 └─ requirements.txt     # 必要パッケージ（discord.py 2.5.2 / openai 1.99.9）
