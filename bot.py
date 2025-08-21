@@ -151,6 +151,12 @@ async def _call_openai_with_retry(fn, *, retries=3, base_delay=1.0, max_delay=8.
 # ===== 非ストリーム高速ダミー（擬似ストリーミングUX） =====
 DISCORD_CHUNK = 1900  # 2000の安全マージン
 
+# 追加: 締め切りパラメータ（UX優先で短め）
+PREVIEW_DEADLINE = 10          # 先出しプレビューの上限秒
+FULL_HARD_DEADLINE = 70        # 本文生成の絶対上限秒（これ超えたら諦める）
+FULL_PER_TRY_TIMEOUT = 30      # 1回のOpenAI呼び出し上限
+FULL_RETRIES = 1               # 再試行回数（0だとリトライ無し、1で最大2回）
+
 async def nonstream_progressive_reply(
     channel,
     *,
@@ -163,8 +169,7 @@ async def nonstream_progressive_reply(
     1) placeholder即送信
     2) miniで短いプレビュー（~80tokens）を先行生成
     3) 並列でフル本文を生成。完了時にeditで差し替え、余剰は追送
-    4) 低頻度でplaceholderを微更新（… を増やすだけ）
-    全部 stream=False。認証いらない。
+    4) 一定時間で諦めてエラーメッセージに切り替える（ハード締め切り）
     """
     msg = await channel.send(placeholder, allowed_mentions=ALLOWED)
     my_msgs[msg.id] = {"channel_id": msg.channel.id, "content": placeholder[:200], "at": datetime.datetime.utcnow()}
@@ -187,32 +192,42 @@ async def nonstream_progressive_reply(
 
     async def _preview_call():
         try:
-            async with asyncio.timeout(min(OPENAI_TIMEOUT, 15)):
+            async with asyncio.timeout(min(PREVIEW_DEADLINE, FULL_PER_TRY_TIMEOUT)):
                 resp = await oai.chat.completions.create(
                     model=model_preview,
                     messages=messages,
-                    max_completion_tokens=80,  # 旧max_tokensじゃない
+                    max_completion_tokens=80,
                 )
             return (resp.choices[0].message.content or "").strip()
         except Exception:
             return ""
 
-    async def _full_call():
-        def _api_call():
-            return oai.chat.completions.create(
-                model=model_full,
-                messages=messages,
-            )
-        resp = await _call_openai_with_retry(_api_call, retries=3)
-        return (resp.choices[0].message.content or "").strip()
+    async def _full_call_with_light_retry():
+        # 自前の軽量リトライ + 各試行に短いタイムアウト
+        last_err = None
+        tries = FULL_RETRIES + 1
+        for attempt in range(tries):
+            try:
+                async with asyncio.timeout(FULL_PER_TRY_TIMEOUT):
+                    resp = await oai.chat.completions.create(
+                        model=model_full,
+                        messages=messages,
+                    )
+                return (resp.choices[0].message.content or "").strip()
+            except (APITimeoutError, APIConnectionError, RateLimitError, APIError, httpx.ReadTimeout, asyncio.TimeoutError) as e:
+                last_err = e
+                if attempt < tries - 1:
+                    await asyncio.sleep(1.0 + random.random() * 0.5)
+                else:
+                    raise last_err
 
     preview_task = asyncio.create_task(_preview_call())
-    full_task = asyncio.create_task(_full_call())
+    full_task = asyncio.create_task(_full_call_with_light_retry())
 
     try:
-        # 先にプレビュー
+        # 先にプレビュー（締め切りつき）
         try:
-            preview = await asyncio.wait_for(preview_task, timeout=12)
+            preview = await asyncio.wait_for(preview_task, timeout=PREVIEW_DEADLINE + 2)
         except asyncio.TimeoutError:
             preview = ""
         if preview:
@@ -223,11 +238,21 @@ async def nonstream_progressive_reply(
             except Exception:
                 pass
 
-        # 本文
-        final_text = await full_task
-        final_text = _strip_lifehack_tone(final_text) or "……返す言葉が見つからなかったわ。"
+        # 本文（ハード締め切りつき）
+        try:
+            final_text = await asyncio.wait_for(full_task, timeout=FULL_HARD_DEADLINE)
+        except asyncio.TimeoutError:
+            full_task.cancel()
+            try:
+                await msg.edit(content="魔力切れ。少ししてからもう一度。")
+                my_msgs[msg.id] = {"channel_id": msg.channel.id, "content": "魔力切れ。少ししてからもう一度。", "at": datetime.datetime.utcnow()}
+            except Exception:
+                pass
+            return "魔力切れ。少ししてからもう一度。"
 
+        final_text = _strip_lifehack_tone(final_text) or "……返す言葉が見つからなかったわ。"
         chunks = [final_text[i:i+DISCORD_CHUNK] for i in range(0, len(final_text), DISCORD_CHUNK)] or [final_text]
+
         try:
             await msg.edit(content=chunks[0])
             my_msgs[msg.id] = {"channel_id": msg.channel.id, "content": chunks[0][:200], "at": datetime.datetime.utcnow()}
