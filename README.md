@@ -1,6 +1,6 @@
 # LeaFAI - Discord Bot on Railway — README
 
-> これはローカル実行を前提にしていません。Railway にデプロイして動かす構成です。
+> ローカル実行を前提にしていません。Railway にデプロイして動かす構成です。
 
 ---
 
