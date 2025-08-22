@@ -81,10 +81,10 @@ Discord (Gateway) ──> bot.py
 | `MODEL_HEAVY` |  | `gpt-5` | 重めモデル 場合によってはminiも選択肢|
 | `MODEL_VISION` |  | `gpt-5-vision` | 画像混在時の強制切替先（未指定なら内部デフォルトを使用） |
 | `AFFINITY_PATH` |  | `/data/affinity.json` | 好感度の保存先（Volume必須） |
-| `PREVIEW_TOKENS` |  | `100` | 先出しプレビューの上限 （※うまく返信されないときは徐々に上げてみてください）|
+| `PREVIEW_TOKENS` |  | `100` | 先出しプレビューの上限 （※うまく返信されないときは徐々に上げる）|
 | `FULL_TOKENS_FAST` |  | `400` | mini の本文上限 （※同上）|
 | `FULL_TOKENS_HEAVY` |  | `700` | heavy の本文上限 （※同上）|
-| `OPENAI_TIMEOUT` |  | `45` | OpenAI 呼び出しの全体タイムアウト（秒） （※こちらも）|
+| `OPENAI_TIMEOUT` |  | `45` | OpenAI 呼び出しの全体タイムアウト（秒）（※こちらも）|
 
 > ℹ️ **サンプリング系 (temperature 等)** は `gpt-5*` では送らず、`gpt-4/4o` のときのみ付与する実装です。
 
