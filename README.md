@@ -77,8 +77,8 @@ Discord (Gateway) ──> bot.py
 |---|:--:|---|---|
 | `DISCORD_TOKEN` | ✅ | (Discord Bot Token) | Discord Bot のトークン |
 | `OPENAI_API_KEY` | ✅ | (OpenAI API Key) | OpenAI API キー |
-| `MODEL_FAST` |  | `gpt-5-mini` | 軽量モデル |
-| `MODEL_HEAVY` |  | `gpt-5` | 重めモデル |
+| `MODEL_FAST` |  | `gpt-5-mini`or nano | 軽量&最軽量モデル |
+| `MODEL_HEAVY` |  | `gpt-5` | 重めモデル 場合によってはminiも選択肢|
 | `MODEL_VISION` |  | `gpt-5-vision` | 画像混在時の強制切替先（未指定なら内部デフォルトを使用） |
 | `AFFINITY_PATH` |  | `/data/affinity.json` | 好感度の保存先（Volume必須） |
 | `PREVIEW_TOKENS` |  | `100` | 先出しプレビューの上限 （※うまく返信されないときは徐々に上げてみてください）|
